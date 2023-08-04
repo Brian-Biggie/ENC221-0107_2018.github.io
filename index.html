@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Weather Monitoring Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .blinking-marker {
+            animation: blink 1s infinite;
+        }
+        .round-marker {
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+        }
+    </style>
+    <script>
+        $(document).ready(function() {
+            const apiKey = '12a2186f7c9f9152a1d15a2f801ee6e8'; // Replace with your actual API key
+
+            const mymap = L.map('mapid').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(mymap);
+
+            function fetchWeatherData(city, time) {
+                const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=metric`;
+
+                $.get(apiUrl, function(data) {
+                    const list = data.list;
+                    let targetTime;
+
+                    if (time === 'morning') {
+                        targetTime = '06:00:00';
+                    } else if (time === 'noon') {
+                        targetTime = '12:00:00';
+                    } else if (time === 'evening') {
+                        targetTime = '18:00:00';
+                    }
+
+                    const matchingData = list.find(item => item.dt_txt.includes(targetTime));
+
+                    if (matchingData) {
+                        const weather = matchingData.weather[0];
+                        const description = weather.description;
+                        const temperature = matchingData.main.temp;
+                        const iconCode = weather.icon;
+
+                        // Update HTML elements with weather data
+                        $(`#${time}Description`).text(`Description: ${description}`);
+                        $(`#${time}Temperature`).text(`Temperature: ${temperature} °C`);
+                        $(`#${time}Icon`).attr('src', `http://openweathermap.org/img/w/${iconCode}.png`);
+                    }
+                });
+            }
+
+            function updateMap(city, lat, lon) {
+                mymap.setView([lat, lon], 10);
+
+                // Clear existing markers
+                mymap.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker) {
+                        mymap.removeLayer(layer);
+                    }
+                });
+
+                // Add blinking marker
+                const marker = L.marker([lat, lon], { className: 'blinking-marker round-marker' }).addTo(mymap)
+                    .bindPopup(city)
+                    .openPopup();
+
+                fetchWeatherData(city, 'morning');
+                fetchWeatherData(city, 'noon');
+                fetchWeatherData(city, 'evening');
+            }
+
+            $('#searchForm').submit(function(event) {
+                event.preventDefault();
+                const city = $('#cityInput').val();
+                const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
+
+                $.get(apiUrl, function(data) {
+                    const lat = data.coord.lat;
+                    const lon = data.coord.lon;
+                    updateMap(city, lat, lon);
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Real-Time Weather Monitoring Map</h1>
+    <div id="mapid" style="width: 100%; height: 400px;"></div>
+    <form id="searchForm">
+        <input type="text" id="cityInput" placeholder="Enter a city">
+        <button type="submit">Search</button>
+    </form>
+    <div id="morningWeather">
+        <h2>Morning Weather</h2>
+        <p id="morningDescription">Description: -</p>
+        <p id="morningTemperature">Temperature: -</p>
+        <img id="morningIcon" src="" alt="Weather Icon">
+    </div>
+    <div id="noonWeather">
+        <h2>Noon Weather</h2>
+        <p id="noonDescription">Description: -</p>
+        <p id="noonTemperature">Temperature: -</p>
+        <img id="noonIcon" src="" alt="Weather Icon">
+    </div>
+    <div id="eveningWeather">
+        <h2>Evening Weather</h2>
+        <p id="eveningDescription">Description: -</p>
+        <p id="eveningTemperature">Temperature: -</p>
+        <img id="eveningIcon" src="" alt="Weather Icon">
+    </div>
+</body>
+</html>
