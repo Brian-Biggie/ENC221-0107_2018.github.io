@@ -21,10 +21,41 @@
             background-color: red;
             border-radius: 50%;
         }
+
+        /* Tabbed layout styles */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+        }
+
+        .tab-content {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        /* Column styles */
+        .column {
+            flex: 1;
+            margin: 0 10px;
+        }
+
+        /* Footer styles */
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+        }
     </style>
     <script>
         $(document).ready(function() {
-            const apiKey = '12a2186f7c9f9152a1d15a2f801ee6e8'; // Replace with your actual API key
+            const apiKey = '12a2186f7c9f9152a1d15a2f801ee6e8'; // Replace with your OpenWeatherMap API key
+            const timeZoneApiKey = 'YUQZEYR4XU38'; // Replace with your TimeZoneDB API key
 
             const mymap = L.map('mapid').setView([0, 0], 2);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -44,6 +75,29 @@
                         targetTime = '12:00:00';
                     } else if (time === 'evening') {
                         targetTime = '18:00:00';
+                    } else if (time === 'current') {
+                        // Fetch current weather data
+                        const currentWeather = data.list[0];
+                        const weather = currentWeather.weather[0];
+                        const description = weather.description;
+                        const temperature = currentWeather.main.temp;
+                        const iconCode = weather.icon;
+                        const humidity = currentWeather.main.humidity;
+                        const windSpeed = currentWeather.wind.speed;
+                        const precipitation = currentWeather.rain ? currentWeather.rain['3h'] : 'N/A';
+                        const sunshine = currentWeather.sunrise && currentWeather.sunset ? 'Available' : 'N/A';
+                        const cloudCover = currentWeather.clouds.all;
+
+                        // Update HTML elements with weather data
+                        $('#currentDescription').text(`Description: ${description}`);
+                        $('#currentTemperature').text(`Temperature: ${temperature} °C`);
+                        $('#currentIcon').attr('src', `http://openweathermap.org/img/w/${iconCode}.png`);
+                        $('#currentHumidity').text(`Humidity: ${humidity}%`);
+                        $('#currentWindSpeed').text(`Wind Speed: ${windSpeed} m/s`);
+                        $('#currentPrecipitation').text(`Precipitation: ${precipitation} mm`);
+                        $('#currentSunshine').text(`Sunshine: ${sunshine}`);
+                        $('#currentCloudCover').text(`Cloud Cover: ${cloudCover}%`);
+                        return;
                     }
 
                     const matchingData = list.find(item => item.dt_txt.includes(targetTime));
@@ -58,6 +112,41 @@
                         $(`#${time}Description`).text(`Description: ${description}`);
                         $(`#${time}Temperature`).text(`Temperature: ${temperature} °C`);
                         $(`#${time}Icon`).attr('src', `http://openweathermap.org/img/w/${iconCode}.png`);
+                    }
+                });
+            }
+
+            function fetchLocalTime(lat, lon, timeElement, targetTime) {
+                const timeZoneApiUrl = `https://api.timezonedb.com/v2.1/get-time-zone?key=${timeZoneApiKey}&format=json&by=position&lat=${lat}&lng=${lon}`;
+
+                $.get(timeZoneApiUrl, function(timeData) {
+                    if (timeData.status === 'OK') {
+                        const localTime = new Date(timeData.formatted);
+                        const targetHour = parseInt(targetTime.split(':')[0], 10);
+                        localTime.setHours(targetHour);
+
+                        const options = { hour: 'numeric', minute: 'numeric', timeZoneName: 'short' };
+                        const formattedTime = localTime.toLocaleString('en-US', options);
+
+                        $(timeElement).text(`Local Time: ${formattedTime}`);
+                    } else {
+                        $(timeElement).text('Local Time: N/A');
+                    }
+                });
+            }
+
+            function fetchCurrentTime(lat, lon, timeElement) {
+                const timeZoneApiUrl = `https://api.timezonedb.com/v2.1/get-time-zone?key=${timeZoneApiKey}&format=json&by=position&lat=${lat}&lng=${lon}`;
+
+                $.get(timeZoneApiUrl, function(timeData) {
+                    if (timeData.status === 'OK') {
+                        const currentTime = new Date();
+                        const options = { hour: 'numeric', minute: 'numeric', second: 'numeric', timeZoneName: 'short' };
+                        const formattedTime = currentTime.toLocaleString('en-US', options);
+
+                        $(timeElement).text(`Current Time: ${formattedTime}`);
+                    } else {
+                        $(timeElement).text('Current Time: N/A');
                     }
                 });
             }
@@ -80,6 +169,18 @@
                 fetchWeatherData(city, 'morning');
                 fetchWeatherData(city, 'noon');
                 fetchWeatherData(city, 'evening');
+                fetchWeatherData(city, 'current'); // Fetch current weather data
+                fetchLocalTime(lat, lon, '#morningTime', '06:00:00');
+                fetchLocalTime(lat, lon, '#noonTime', '12:00:00');
+                fetchLocalTime(lat, lon, '#eveningTime', '18:00:00');
+                fetchCurrentTime(lat, lon, '#currentTime');
+            }
+
+            function updateTabWeather(city, lat, lon, tabId1, tabId2, time1, time2) {
+                fetchWeatherData(city, time1);
+                fetchWeatherData(city, time2);
+                fetchLocalTime(lat, lon, `#${tabId1}Time`, time1);
+                fetchLocalTime(lat, lon, `#${tabId2}Time`, time2);
             }
 
             $('#searchForm').submit(function(event) {
@@ -90,7 +191,14 @@
                 $.get(apiUrl, function(data) {
                     const lat = data.coord.lat;
                     const lon = data.coord.lon;
+
                     updateMap(city, lat, lon);
+
+                    // Update Morning and Noon tabs
+                    updateTabWeather(city, lat, lon, 'morningWeather', 'noonWeather', '06:00:00', '12:00:00');
+
+                    // Update Evening and Current Time tabs
+                    updateTabWeather(city, lat, lon, 'eveningWeather', 'currentWeather', '18:00:00', 'current');
                 });
             });
         });
@@ -103,23 +211,70 @@
         <input type="text" id="cityInput" placeholder="Enter a city">
         <button type="submit">Search</button>
     </form>
-    <div id="morningWeather">
-        <h2>Morning Weather</h2>
-        <p id="morningDescription">Description: -</p>
-        <p id="morningTemperature">Temperature: -</p>
-        <img id="morningIcon" src="" alt="Weather Icon">
+
+    <!-- Tabbed layout for weather information -->
+    <div class="tabs">
+        <div class="tab">
+            <input type="radio" name="tabs" id="tab1" checked>
+            <label for="tab1">Morning</label>
+            <input type="radio" name="tabs" id="tab2">
+            <label for="tab2">Noon</label>
+            <div class="tab-content">
+                <div class="column">
+                    <div id="morningWeather">
+                        <h2>Morning Weather</h2>
+                        <p id="morningDescription">Description: -</p>
+                        <p id="morningTemperature">Temperature: -</p>
+                        <img id="morningIcon" src="" alt="Weather Icon">
+                        <p id="morningTime">Local Time: -</p>
+                    </div>
+                </div>
+                <div class="column">
+                    <div id="noonWeather">
+                        <h2>Noon Weather</h2>
+                        <p id="noonDescription">Description: -</p>
+                        <p id="noonTemperature">Temperature: -</p>
+                        <img id="noonIcon" src="" alt="Weather Icon">
+                        <p id="noonTime">Local Time: -</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tab">
+            <input type="radio" name="tabs" id="tab3">
+            <label for="tab3">Evening</label>
+            <input type="radio" name="tabs" id="tab4">
+            <label for="tab4">Current Time</label>
+            <div class="tab-content">
+                <div class="column">
+                    <div id="eveningWeather">
+                        <h2>Evening Weather</h2>
+                        <p id="eveningDescription">Description: -</p>
+                        <p id="eveningTemperature">Temperature: -</p>
+                        <img id="eveningIcon" src="" alt="Weather Icon">
+                        <p id="eveningTime">Local Time: -</p>
+                    </div>
+                </div>
+                <div class="column">
+                    <div id="currentWeather">
+                        <h2>Current Weather</h2>
+                        <p id="currentDescription">Description: -</p>
+                        <p id="currentTemperature">Temperature: -</p>
+                        <img id="currentIcon" src="" alt="Weather Icon">
+                        <p id="currentHumidity">Humidity: -</p>
+                        <p id="currentWindSpeed">Wind Speed: -</p>
+                        <p id="currentPrecipitation">Precipitation: -</p>
+                        <p id="currentSunshine">Sunshine: -</p>
+                        <p id="currentCloudCover">Cloud Cover: -</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="noonWeather">
-        <h2>Noon Weather</h2>
-        <p id="noonDescription">Description: -</p>
-        <p id="noonTemperature">Temperature: -</p>
-        <img id="noonIcon" src="" alt="Weather Icon">
-    </div>
-    <div id="eveningWeather">
-        <h2>Evening Weather</h2>
-        <p id="eveningDescription">Description: -</p>
-        <p id="eveningTemperature">Temperature: -</p>
-        <img id="eveningIcon" src="" alt="Weather Icon">
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>ENC221-0107/2018</p>
     </div>
 </body>
 </html>
